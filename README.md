@@ -110,7 +110,7 @@ To prevent the AI from playing the same opening lines repeatedly:
 - **Stockfish not found**: The app looks for Stockfish at `/usr/games/stockfish` or in your system PATH. If installed elsewhere, ensure it's in your PATH or update `engine_connector.py`.
 - **PyQt6 xcb-cursor error**: If the GUI doesn't open, install the missing library: `sudo apt install libxcb-cursor0`.
 
-## 🚀 Elite Features & Robustness (Latest Update)
+## Elite Features & Robustness (Latest Update)
 
 ### 1. Geometric Data Augmentation (2x Speed)
 The training pipeline now automatically flips every board position horizontally, effectively **doubling** the dataset size without any extra computational cost. This ensures the bot learns patterns symmetrically for both White and Black.
