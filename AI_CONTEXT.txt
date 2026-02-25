@@ -1,0 +1,59 @@
+# ANTIGRAVITY CHESS SUITE - AI CONTEXT DOCUMENT
+# CORE PHILOSOPHY: SIMPLE IS GENIUS
+
+## 1. SYSTEM IDENTITY & PURPOSE
+This project is a high-performance, resource-constrained Chess AI training pipeline designed for a single consumer laptop (optimized for 32GB RAM / 4GB VRAM). 
+It follows the **"Simple is Genius"** mantra: maximizing performance through code elegance and minimizing overhead.
+
+- **Imitation Learning**: High-quality targets generated via Stockfish.
+- **Asynchronous Training**: Decoupled generation (workers) and training (main loop).
+- **Zero-Copy Shared Memory**: 300k+ positions passed via `multiprocessing.RawArray`.
+- **Refactored Dashboard**: A PyQt6 GUI optimized for low latency and high visualization density.
+
+## 2. KEY COMMANDS
+- **Launch Dashboard (Main Entry)**: `python dashboard_gui.py`
+- **Manual Training Start**: `python train_az.py` (Usually spawned by Dashboard)
+- **Install Dependencies**: `pip install -r requirements.txt`
+
+## 3. FILE MANIFEST & ARCHITECTURE
+
+### Core Components
+- **`chess_engine.py`**:
+  - **Role**: Data generation and neural network architecture.
+  - **Network**: `ChessActorCritic` (ResNet10) with standardized `HIDDEN_DIM = 128`, `POLICY_DIM = 128`, and `VALUE_DIM = 64` (~3.5M parameters).
+  - **Diversity**: Multi-PV=3 move selection with a 50cp margin and opening book support.
+  - **Optimizations**: `board_to_tensor` optimized for throughput; geometric augmentation.
+
+- **`train_az.py`**:
+  - **Role**: The high-capacity Trainer.
+  - **Logic**: Samples 4096-sized batches for GPU training using mixed precision (AMP).
+  - **Auto-Elo**: Automatically triggers benchmarks every 250 episodes.
+  - **Cleanup**: Robust `psutil`-based process tree teardown on exit.
+
+- **`dashboard_gui.py`**:
+  - **Role**: The Refactored Control Center.
+  - **Refactor**: "Simple is Genius" overhaul for `HistoryManager`, `EvaluationBar`, and thread management.
+  - **Graphs**: Persistent, interactive metric visualization (PyQtGraph) tracking loss/samples/Elo.
+  - **Log Throttling**: Terminal output suppressed during high-throughput training to ensure UI responsiveness.
+
+### Support Modules
+- **`engine_connector.py`**: Bridge between the UI and the latest AI checkpoints on CPU.
+- **`hardware_monitor.py`**: Real-time vitals (psutil/pynvml) for CPU/GPU/RAM/VRAM.
+- **`elo_evaluator.py`**: Speed-optimized benchmarking playing 5 parallel matches on core 12.
+- **`uci_engine.py`**: Standalone UCI bridge for MonkeyChessAi Mark2.
+- **`error_handler.py`**: Global exception hook for "Genius" level crash reporting and diagnostics.
+
+## 4. SHARED MEMORY ARCHITECTURE
+- **Buffer**: 300,000 samples (~2GB RAM in float16).
+- **Format**: `float16` for states, policies, and values to save memory.
+- **Sync**: Circular buffer with atomic pointer management in `train_az.py`.
+
+## 5. HARDWARE CONSTRAINTS & OPTIMIZATIONS
+- **VRAM (4GB)**: Balanced batch size (4096) and model width (128 filters) to max out utilization without OOM.
+- **CPU**: Precise worker pinning and Stockfish thread limits to prevent latency spikes.
+- **Performance**: 90-100% GPU utilization during training peaks.
+
+## 6. TROUBLESHOOTING
+- **"Stockfish not found"**: Ensure binary is at `/usr/games/stockfish`.
+- **"CUDA OOM"**: Adjust `BATCH_SIZE` or `FORCED_HIDDEN_DIM`.
+- **"UI Lag"**: Check if log throttling is active (handling 100+ lines per second).

@@ -1,0 +1,107 @@
+# ANTIGRAVITY CHESS SUITE - FULL TECHNICAL SPECIFICATION
+# CORE PHILOSOPHY: SIMPLE IS GENIUS
+# Version: 1.0 (Comprehensive AI Reconstruction Doc)
+
+## 1. PROJECT PHILOSOPHY
+**"Simple is Genius"**: Maximize performance by minimizing overhead. 
+The system is designed for hardware-constrained environments (e.g., 32GB RAM / 4GB VRAM) using advanced asynchronous patterns and zero-copy communication.
+
+## 2. SYSTEM ARCHITECTURE
+The system is split into three decoupled layers:
+1.  **Generation Layer**: Background workers using Stockfish Multi-PV to produce high-quality training data.
+2.  **Training Layer**: A GPU-accelerated trainer sampling from a high-speed shared memory circular buffer.
+3.  **UI Layer**: A PyQt6-based dashboard for real-time monitoring, AI interaction, and performance visualization.
+
+---
+
+## 3. CORE AI ENGINE (Neural-Policy)
+
+### 3.1 Neural Network: `ChessActorCritic`
+- **Trunk**: Initial Conv2d layer (3x3) followed by a "Residual Tower" of 10 `ResBlock` units (256 filters).
+- **Heads**:
+    - **Policy Head**: Conv2d (1x1) -> BatchNorm -> Linear -> Raw Logits (4096 dim). [Compression: 128]
+    - **Value Head**: Conv2d (1x1) -> BatchNorm -> Linear (64) -> Linear (1) -> Tanh (-1 to 1).
+- **Implementation**: Defined in `mcts_worker.py`.
+
+### 3.2 Input Representation
+The board is encoded into a (19, 8, 8) tensor:
+- **Planes 0-5**: White pieces (P, N, B, R, Q, K).
+- **Planes 6-11**: Black pieces (P, N, B, R, Q, K).
+- **Plane 12**: Side to move (1 if white, 0 if black).
+- **Planes 13-16**: Castling rights (WK, WQ, BK, BQ).
+- **Plane 17**: Normalized Fullmove number (min(num, 100) / 100).
+- **Plane 18**: Normalized Halfmove clock (min(clock, 50) / 50).
+
+### 3.3 Strategic Search: Direct Policy Selection
+- **Logic**:
+    - The engine selects moves by performing a direct forward pass through the neural network.
+    - **Policy Sampling**: Applies softmax to the policy logits to obtain move probabilities.
+    - **Legal Filtering**: Masks illegal moves and re-normalizes the policy vector.
+    - **Selection**: Returns the legal move with the highest probability (arg max).
+- **Implementation**: Defined in `engine_connector.py` via `ModelInference.get_ai_move`.
+
+---
+
+## 4. TRAINING PIPELINE & DATA FLOW
+
+### 4.1 Shared Memory Buffer (`Zero-Copy`)
+- Use `multiprocessing.RawArray` with `'e'` (float16) to save 50% RAM.
+- **Buffer Format**:
+    - `s_arr`: [MAX_SAMPLES, 19, 8, 8] (States)
+    - `p_arr`: [MAX_SAMPLES, 4096] (Policies)
+    - `v_arr`: [MAX_SAMPLES] (Values)
+- **Synchronization**: `mp.Value` pointers and `mp.Lock()` for atomic updates.
+
+### 4.2 Data Generation (`run_game_worker`)
+- **Move Selection**: 5% pure random (Chaos), 20% sub-optimal (Diversity), 75% Softmax of Stockfish Multi-PV (Top 3).
+- **Augmentation**: Horizontal flipping of the board. Policy vectors are transformed using a pre-generated `REMAP` array.
+- **Reward**: `tanh(score / 400.0)` for continuous value mapping.
+
+### 4.3 Training Loop (`train_az.py`)
+- **Optimizer**: AdamW (lr=1e-4, wd=1e-4).
+- **Mixed Precision**: Uses float16 shared memory and standard Float32 GPU training.
+- **Optimization**: `torch.compile(model)` for high throughput.
+- **Cycle**: Train every 5000 new samples. Batch size = 1024.
+
+---
+
+## 5. GUI ARCHITECTURE (PyQt6 Dashboard)
+
+### 5.1 Main Component: `Dashboard`
+- **Orchestrator**: Manages docks, services (`HardwareWorker`, `SharedReader`, `ModelInference`), and persistent settings.
+- **Threading**:
+    - `TrainingWorker`: Subprocess handling of `train_az.py` with log throttling.
+    - `BotThinker`: Background AI calculation to prevent UI freeze.
+
+### 5.2 Modular Panels
+- **`PlayPanel`**: SVG-based board rendering with move validation and drag-and-drop.
+- **`MonitorPanel`**: Real-time HUD showing CPU/GPU/RAM/VRAM and training speed.
+- **`GraphPanel`**: Uses `pyqtgraph` with X-axis linking for synchronized viewing of Loss, Samples, and Elo.
+- **`TerminalPanel`**: High-performance scrolling log with regex parsing for metrics.
+- **`HistoryManager`**: Handles JSON persistence of metrics and cross-process Elo syncing.
+
+---
+
+## 6. FILE MANIFEST
+- `dashboard_gui.py` / `gui/`: Application frontend and modular component logic.
+- `train_az.py`: Main trainer, shared memory setup, and worker orchestration.
+- `chess_engine.py`: Neural network definition and the game generation worker logic.
+- `engine_connector.py`: Bridge linking UI and Models for direct policy play.
+- `hardware_monitor.py`: NVML/psutil telemetry service.
+- `elo_evaluator.py`: Parallel benchmarking for skill estimation.
+- `error_handler.py`: Global diagnostic and crash reporting suite.
+
+---
+
+## 7. CRITICAL CONSTANTS
+- `OBS_SHAPE`: (19, 8, 8)
+- `MOVE_ACTION_DIM`: 4096
+- `HIDDEN_DIM`: 256
+- `POLICY_DIM`: 128
+- `VALUE_DIM`: 64
+- `NUM_RESIDUAL_BLOCKS`: 10
+- `BATCH_SIZE`: 1024
+- `REMAP`: 4096-element array for O(1) symmetry augmentation.
+
+### Reconstruction Prompt for AI:
+"Build a Python Chess AI training system with the mantra 'SIMPLE IS GENIUS'. Use PyQt6 for the GUI and PyTorch for a ResNet10 Actor-Critic model. Implement an asynchronous generation-training pipeline using multiprocessing shared memory (RawArray float16). The engine uses direct neural policy selection for moves. Include a dashboard with real-time graphs, hardware monitoring, an interactive board, and a global error diagnostic suite."
