@@ -1,7 +1,6 @@
 # Chess Training Dashboard & AI Play
-## SIMPLE IS GENIUS
 
-A high-performance, refactored PyQt6 GUI for monitoring chess training and playing against the AI. This project adheres to the **"Simple is Genius"** principle, focusing on code conciseness, elegance, and maximum performance.
+A high-performance, refactored PyQt6 GUI for monitoring chess training and playing against the AI.
 
 ## Prerequisites
 
