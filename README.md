@@ -1,3 +1,5 @@
+
+#Thx AI btw
 # Chess Training Dashboard & AI Play
 
 A high-performance, refactored PyQt6 GUI for monitoring chess training and playing against the AI.It will randomly plateau at like 100 ish episodes
